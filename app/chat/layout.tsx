@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSocket } from "@/lib/socket-client";
-import UserModal from "@/components/UserModal";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 type UserType = {
   _id: string;
@@ -13,13 +13,18 @@ type UserType = {
   isOnline?: boolean;
 };
 
-export default function ChatLayout({ children }: { children: React.ReactNode }) {
+export default function ChatLayout({
+  children,
+  modal,        // ✅ DO NOT rename this!
+}: {
+  children: React.ReactNode;
+  modal: React.ReactNode;
+}) {
   const router = useRouter();
   const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState(null);
 
-  const socket = getSocket();     // <-- FIX HERE
+  const socket = getSocket();
 
   useEffect(() => {
     fetch("/api/users")
@@ -49,73 +54,51 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       socket.off("user-online");
       socket.off("user-offline");
     };
-  }, [socket]);  // <-- FIX
+  }, [socket]);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
-      {/* LEFT SIDE USERS LIST */}
+    <div className="flex h-[calc(100vh-4rem)] relative">
+      
+      {/* 🔥 correct modal slot */}
+      {modal}
+
       <div className="w-1/3 border-r overflow-y-auto bg-gray-50">
         <h2 className="p-4 text-xl font-semibold border-b">Users</h2>
 
         {loading && <p className="p-4">Loading...</p>}
 
         {users.map((u) => (
-          // <Link
-          //   key={u._id}
-          //   href={`/chat/${u._id}`}
-          //   className="flex items-center gap-3 p-3 hover:bg-gray-200 border-b"
-          // >
-          //   <img
-          //     src={u.avatar || "/avatar.png"}
-          //     className="w-10 h-10 rounded-full border"
-          //   />
-          //   <span>{u.username}</span>
-
-          //   <span
-          //     className={`ml-auto w-3 h-3 rounded-full ${
-          //       u.isOnline ? "bg-green-500" : "bg-gray-400"
-          //     }`}
-          //   ></span>
-          // </Link>
           <div
             key={u._id}
             className="flex items-center gap-3 p-3 hover:bg-gray-200 border-b cursor-pointer"
           >
-            {/* Avatar — click → open modal */}
-            <img
-              src={u.avatar || "/avatar.png"}
-              className="w-10 h-10 rounded-full border"
-              onClick={(e) => {
-                e.stopPropagation();     // IMPORTANT → do NOT open chat!!
-                setSelectedUser(u);
-              }}
-            />
+            <Link href={`/chat/(.)profile/${u._id}`} prefetch={false}>
+              <Image
+                src={u.avatar || "/avatar.png"}
+                width={40}
+                height={40}
+                className="rounded-full cursor-pointer hover:opacity-80"
+                alt="avatar"
+              />
+            </Link>
 
-            {/* Name & chat trigger */}
             <div
-              onClick={() => router.push(`/chat/${u._id}`)}
               className="flex-1"
+              onClick={() => router.push(`/chat/chatbox/${u._id}`)}
             >
-              <span>{u.username}</span>
+              {u.username}
             </div>
 
-            {/* Online dot */}
             <span
-              className={`w-3 h-3 rounded-full ${u.isOnline ? "bg-green-500" : "bg-gray-400"
-                }`}
+              className={`w-3 h-3 rounded-full ${
+                u.isOnline ? "bg-green-500" : "bg-gray-400"
+              }`}
             ></span>
           </div>
-
         ))}
       </div>
 
-      {/* RIGHT SIDE */}
       <div className="flex-1">{children}</div>
-      <UserModal
-        user={selectedUser}
-        onClose={() => setSelectedUser(null)}
-      />
-
     </div>
   );
 }

@@ -1,64 +1,57 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getSocket } from "@/lib/socket-client";
 
-export default function ChatWindow() {
-  const { userId } = useParams();
-  const socket = getSocket(); // <-- use shared socket
+export default function ChatWindow({ userId, initialMessages }) {
+  const socket = getSocket();
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState(initialMessages || []);
   const [text, setText] = useState("");
 
-  // Load chat history
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   useEffect(() => {
-    if (!userId) return;
+    scrollToBottom();
+  }, []);
 
-    fetch(`/api/messages/${userId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setMessages(data);
-      });
-  }, [userId]);
-
-  // Listen for incoming messages
   useEffect(() => {
     if (!socket) return;
 
     const handler = (msg: any) => {
-      if (
-        msg.sender === userId ||
-        msg.receiver === userId
-      ) {
+      if (msg.sender === userId || msg.receiver === userId) {
         setMessages((prev) => [...prev, msg]);
+        scrollToBottom();
       }
     };
 
     socket.on("private-message", handler);
-
-    return () => {
-      socket.off("private-message", handler);
-    };
+    return () => socket.off("private-message", handler);
   }, [socket, userId]);
 
   const sendMessage = () => {
     if (!text.trim()) return;
 
-    socket.emit("private-message", {
-      to: userId,
-      text,
-    });
+    socket.emit("private-message", { to: userId, text });
+
+    // optimistic UI
+    setMessages((prev) => [...prev, { text, sender: "me" }]);
+    scrollToBottom();
 
     setText("");
   };
 
   return (
     <div className="flex flex-col h-full">
+      {/* Header */}
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">Chat</h2>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 p-4 overflow-y-auto space-y-2">
         {messages.map((m, i) => (
           <div
@@ -70,8 +63,11 @@ export default function ChatWindow() {
             {m.text}
           </div>
         ))}
+
+        <div ref={bottomRef} />
       </div>
 
+      {/* Input bar */}
       <div className="p-4 border-t flex gap-2">
         <input
           value={text}

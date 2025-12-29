@@ -12,7 +12,15 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 
 import { toast } from "sonner";
-import PhotoViewer from "@/components/gallery/PhotoViewer"; // ⭐ NEW
+import PhotoViewer from "@/components/gallery/PhotoViewer";
+
+import {
+  updateProfileAction,
+  uploadAvatarAction,
+  uploadPhotoAction,
+  deletePhotoAction,
+  setAvatarFromPhotoAction,
+} from "./actions";
 
 export default function ProfilePage() {
   const { user, reloadUser } = useAuth();
@@ -51,69 +59,8 @@ export default function ProfilePage() {
     }
   }, [uploadProgress]);
 
-  // --------- HANDLERS ---------
 
-  const uploadAvatarHandler = async (e: any) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingAvatar(true);
-    simulateProgress();
-
-    const form = new FormData();
-    form.append("avatar", file);
-
-    const res = await fetch("/api/profile/avatar", {
-      method: "POST",
-      body: form,
-    });
-
-    setUploadingAvatar(false);
-
-    if (!res.ok) return toast.error("Failed to update avatar");
-
-    toast.success("Avatar updated!");
-    await reloadUser();
-  };
-
-  const setAsAvatar = async (url: string) => {
-    const res = await fetch("/api/profile/avatar/set-from-photo", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-
-    if (!res.ok) {
-      toast.error("Failed to set avatar");
-      return;
-    }
-
-    toast.success("Avatar updated!");
-    await reloadUser();
-  };
-
-  const uploadPhotoHandler = async (e: any) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingPhoto(true);
-    simulateProgress();
-
-    const form = new FormData();
-    form.append("photo", file);
-
-    const res = await fetch("/api/profile/photos/upload", {
-      method: "POST",
-      body: form,
-    });
-
-    setUploadingPhoto(false);
-
-    if (!res.ok) return toast.error("Upload failed (limit 10?)");
-
-    toast.success("Photo uploaded!");
-    await reloadUser();
-  };
+  // ---------with Server Actions HANDLERS ---------
 
   const updateProfileHandler = async (e: any) => {
     e.preventDefault();
@@ -121,33 +68,171 @@ export default function ProfilePage() {
 
     const form = new FormData(e.target);
 
-    const res = await fetch("/api/profile/update", {
-      method: "POST",
-      body: form,
-    });
+    try {
+      await updateProfileAction(form);
+      toast.success("Profile updated!");
+      await reloadUser();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
 
     setSavingProfile(false);
+  };
 
-    if (!res.ok) return toast.error("Profile update failed");
+  const uploadAvatarHandler = async (e: any) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    toast.success("Profile updated!");
-    await reloadUser();
+    setUploadingAvatar(true);
+    const form = new FormData();
+    form.append("avatar", file);
+
+    try {
+      await uploadAvatarAction(form);
+      toast.success("Avatar updated!");
+      await reloadUser();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+
+    setUploadingAvatar(false);
+  };
+
+  const uploadPhotoHandler = async (e: any) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingPhoto(true);
+    const form = new FormData();
+    form.append("photo", file);
+
+    try {
+      await uploadPhotoAction(form);
+      toast.success("Photo uploaded!");
+      await reloadUser();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+
+    setUploadingPhoto(false);
   };
 
   const deletePhoto = async (url: string) => {
-    const res = await fetch("/api/profile/photos/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-
-    if (!res.ok) return toast.error("Failed to delete photo");
-
-    toast.success("Photo deleted");
-    await reloadUser();
+    try {
+      await deletePhotoAction(url);
+      toast.success("Photo deleted");
+      await reloadUser();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  // --------- RENDER ---------
+  const setAsAvatar = async (url: string) => {
+    try {
+      await setAvatarFromPhotoAction(url);
+      toast.success("Avatar updated!");
+      await reloadUser();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+
+  // ---------without Server Actions HANDLERS ---------
+
+  // const uploadAvatarHandler = async (e: any) => {
+  //   const file = e.target.files?.[0];
+  //   if (!file) return;
+
+  //   setUploadingAvatar(true);
+  //   simulateProgress();
+
+  //   const form = new FormData();
+  //   form.append("avatar", file);
+
+  //   const res = await fetch("/api/profile/avatar", {
+  //     method: "POST",
+  //     body: form,
+  //   });
+
+  //   setUploadingAvatar(false);
+
+  //   if (!res.ok) return toast.error("Failed to update avatar");
+
+  //   toast.success("Avatar updated!");
+  //   await reloadUser();
+  // };
+
+  // const setAsAvatar = async (url: string) => {
+  //   const res = await fetch("/api/profile/avatar/set-from-photo", {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({ url }),
+  //   });
+
+  //   if (!res.ok) {
+  //     toast.error("Failed to set avatar");
+  //     return;
+  //   }
+
+  //   toast.success("Avatar updated!");
+  //   await reloadUser();
+  // };
+
+  // const uploadPhotoHandler = async (e: any) => {
+  //   const file = e.target.files?.[0];
+  //   if (!file) return;
+
+  //   setUploadingPhoto(true);
+  //   simulateProgress();
+
+  //   const form = new FormData();
+  //   form.append("photo", file);
+
+  //   const res = await fetch("/api/profile/photos/upload", {
+  //     method: "POST",
+  //     body: form,
+  //   });
+
+  //   setUploadingPhoto(false);
+
+  //   if (!res.ok) return toast.error("Upload failed (limit 10?)");
+
+  //   toast.success("Photo uploaded!");
+  //   await reloadUser();
+  // };
+
+  // const updateProfileHandler = async (e: any) => {
+  //   e.preventDefault();
+  //   setSavingProfile(true);
+
+  //   const form = new FormData(e.target);
+
+  //   const res = await fetch("/api/profile/update", {
+  //     method: "POST",
+  //     body: form,
+  //   });
+
+  //   setSavingProfile(false);
+
+  //   if (!res.ok) return toast.error("Profile update failed");
+
+  //   toast.success("Profile updated!");
+  //   await reloadUser();
+  // };
+
+  // const deletePhoto = async (url: string) => {
+  //   const res = await fetch("/api/profile/photos/delete", {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({ url }),
+  //   });
+
+  //   if (!res.ok) return toast.error("Failed to delete photo");
+
+  //   toast.success("Photo deleted");
+  //   await reloadUser();
+  // };
 
   if (!user)
     return (

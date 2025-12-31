@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import { Message } from "@/models/Message";
+import { User } from "@/models/User";
 import { verifyJWT } from "@/lib/jwt";
 
 export async function GET(req: Request, { params }: any) {
@@ -12,7 +13,7 @@ export async function GET(req: Request, { params }: any) {
     // --- FIX: Await params ---
     const { userId: otherUserId } = await params;
 
-    // Get token from cookie
+    // Extract token
     const cookie = req.headers.get("cookie") || "";
     const token = cookie
       .split(";")
@@ -20,14 +21,28 @@ export async function GET(req: Request, { params }: any) {
       .find((c) => c.startsWith("token="))
       ?.split("=")[1];
 
-    if (!token) return NextResponse.json([]);
+    if (!token) {
+      return NextResponse.json({ messages: [], user: null });
+    }
 
     const decoded: any = verifyJWT(token);
-    if (!decoded?.id) return NextResponse.json([]);
+    if (!decoded?.id) {
+      return NextResponse.json({ messages: [], user: null });
+    }
 
     const currentUserId = decoded.id;
 
-    // Fetch chat history
+    // Fetch the OTHER USER details
+    const otherUser = await User.findById(otherUserId)
+      .select("_id username avatar email")
+      .lean();
+
+    // If other user missing
+    if (!otherUser) {
+      return NextResponse.json({ messages: [], user: null });
+    }
+
+    // Fetch message history
     const messages = await Message.find({
       $or: [
         { sender: currentUserId, receiver: otherUserId },
@@ -37,9 +52,13 @@ export async function GET(req: Request, { params }: any) {
       .sort({ createdAt: 1 })
       .lean();
 
-    return NextResponse.json(messages);
+    return NextResponse.json({
+      messages,
+      user: otherUser,
+    });
+
   } catch (err) {
     console.error("HISTORY ERROR:", err);
-    return NextResponse.json([]);
+    return NextResponse.json({ messages: [], user: null });
   }
 }

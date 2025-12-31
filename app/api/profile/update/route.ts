@@ -1,32 +1,27 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import { User } from "@/models/User";
-import { verifyJWT } from "@/lib/jwt";
-import cookie from "cookie";
-
-export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const cookies = cookie.parse(req.headers.get("cookie") || "");
-    const token = cookies.token;
-    const decoded: any = verifyJWT(token);
-    if (!decoded?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const form = await req.formData();
-
-    const updateData: any = {};
-    if (form.get("username")) updateData.username = form.get("username");
-    if (form.get("email")) updateData.email = form.get("email");
-    if (form.get("phone")) updateData.phone = form.get("phone");
-
     await connectDB();
+    const body = await req.json();
 
-    await User.updateOne({ _id: decoded.id }, updateData);
+    const { userId, username, email, phone } = body;
 
-    return NextResponse.json({ success: true });
+    if (!userId) {
+      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+    }
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      { username, email, phone },
+      { new: true }
+    ).lean();
+
+    return NextResponse.json({ success: true, user: updated });
   } catch (err) {
-    console.error("Profile update error:", err);
-    return NextResponse.json({ error: "Update failed" }, { status: 500 });
+    console.error("UPDATE PROFILE ERROR:", err);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

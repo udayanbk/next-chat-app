@@ -1,34 +1,40 @@
 import { NextResponse } from "next/server";
-import cookie from "cookie";
-import { verifyJWT } from "@/lib/jwt";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { s3 } from "@/lib/s3";
 import connectDB from "@/lib/db";
 import { User } from "@/models/User";
-import { handleUpload } from "@/lib/upload-handler";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const cookies = cookie.parse(req.headers.get("cookie") || "");
-    const decoded: any = verifyJWT(cookies.token);
-
-    if (!decoded?.id)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     await connectDB();
+    const form = await req.formData();
+    const file = form.get("avatar") as File;
+    const userId = form.get("userId") as string;
 
-    // upload to /public/uploads/avatars
-    const url = await handleUpload(req, "avatars");
+    if (!file || !userId)
+      return NextResponse.json({ error: "Missing data" }, { status: 400 });
 
-    if (!url) {
-      return NextResponse.json({ error: "Upload failed" }, { status: 400 });
-    }
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const key = `avatars/${userId}-${Date.now()}`;
 
-    await User.updateOne({ _id: decoded.id }, { avatar: url });
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: process.env.AWS_S3_BUCKET!,
+        Key: key,
+        Body: buffer,
+        ContentType: file.type,
+      })
+    );
 
-    return NextResponse.json({ success: true, avatar: url });
+    const avatarUrl = `${process.env.AWS_S3_BASE_URL}/${key}`;
+
+    await User.findByIdAndUpdate(userId, { avatar: avatarUrl });
+
+    return NextResponse.json({ success: true, avatar: avatarUrl });
   } catch (err) {
-    console.error("Avatar upload error:", err);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    console.error(err);
+    return NextResponse.json({ error: "Avatar upload failed" }, { status: 500 });
   }
 }
